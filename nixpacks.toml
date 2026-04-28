@@ -11,6 +11,7 @@ nixPkgs = [
   "php84Extensions.pgsql",
   "php84Packages.composer",
   "nodejs_22",
+  "nginx",
 ]
 
 [phases.install]
