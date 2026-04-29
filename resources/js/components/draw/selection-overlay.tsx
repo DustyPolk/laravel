@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { getSelectionBounds } from './lib/bounds';
 import { HANDLE_SIZE } from './lib/constants';
 import { worldToScreen } from './lib/coords';
@@ -30,11 +30,19 @@ interface SelectionOverlayProps {
 
 export function SelectionOverlay({ surfaceRef }: SelectionOverlayProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
-    const dragRef = useRef<{ active: boolean; pointerId: number | null; mode: 'box' | 'endpoint' }>({
+    const dragRef = useRef<{ active: boolean; cleanup: (() => void) | null }>({
         active: false,
-        pointerId: null,
-        mode: 'box',
+        cleanup: null,
     });
+
+    useEffect(() => {
+        return () => {
+            if (dragRef.current.cleanup) {
+                dragRef.current.cleanup();
+                dragRef.current = { active: false, cleanup: null };
+            }
+        };
+    }, []);
 
     const selectedIds = useSceneStore((s) => s.selectedIds);
     const elements = useSceneStore((s) => s.elements);
@@ -54,7 +62,7 @@ export function SelectionOverlay({ surfaceRef }: SelectionOverlayProps) {
     const screenWidth = bounds.width * viewport.scale;
     const screenHeight = bounds.height * viewport.scale;
 
-    const worldFromEvent = (e: React.PointerEvent) => {
+    const worldFromClient = (clientX: number, clientY: number) => {
         const surface = surfaceRef.current;
 
         if (!surface) {
@@ -62,8 +70,8 @@ export function SelectionOverlay({ surfaceRef }: SelectionOverlayProps) {
         }
 
         const rect = surface.getBoundingClientRect();
-        const screenPx = e.clientX - rect.left;
-        const screenPy = e.clientY - rect.top;
+        const screenPx = clientX - rect.left;
+        const screenPy = clientY - rect.top;
         const v = useSceneStore.getState().viewport;
 
         return {
@@ -72,56 +80,59 @@ export function SelectionOverlay({ surfaceRef }: SelectionOverlayProps) {
         };
     };
 
+    const startDrag = (mode: 'box' | 'endpoint') => {
+        if (dragRef.current.cleanup) {
+            dragRef.current.cleanup();
+        }
+
+        const onMove = (e: PointerEvent) => {
+            const w = worldFromClient(e.clientX, e.clientY);
+
+            if (!w) {
+                return;
+            }
+
+            if (mode === 'box') {
+                continueHandleResize(w.worldX, w.worldY, e.shiftKey);
+            } else {
+                continueEndpointDrag(w.worldX, w.worldY, e.shiftKey);
+            }
+        };
+
+        const onUp = () => {
+            if (mode === 'box') {
+                endHandleResize();
+            } else {
+                endEndpointDrag();
+            }
+
+            cleanup();
+        };
+
+        const cleanup = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            dragRef.current = { active: false, cleanup: null };
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+        dragRef.current = { active: true, cleanup };
+    };
+
     const onHandlePointerDown = (handle: HandleKey, e: React.PointerEvent) => {
         e.stopPropagation();
         e.preventDefault();
-        const w = worldFromEvent(e);
+        const w = worldFromClient(e.clientX, e.clientY);
 
         if (!w) {
             return;
         }
 
         beginHandleResize(handle, w.worldX, w.worldY);
-        dragRef.current = { active: true, pointerId: e.pointerId, mode: 'box' };
-        (e.target as Element).setPointerCapture(e.pointerId);
-    };
-
-    const onHandlePointerMove = (e: React.PointerEvent) => {
-        if (!dragRef.current.active) {
-            return;
-        }
-
-        const w = worldFromEvent(e);
-
-        if (!w) {
-            return;
-        }
-
-        if (dragRef.current.mode === 'box') {
-            continueHandleResize(w.worldX, w.worldY, e.shiftKey);
-        } else {
-            continueEndpointDrag(w.worldX, w.worldY, e.shiftKey);
-        }
-    };
-
-    const onHandlePointerUp = (e: React.PointerEvent) => {
-        if (!dragRef.current.active) {
-            return;
-        }
-
-        if (dragRef.current.mode === 'box') {
-            endHandleResize();
-        } else {
-            endEndpointDrag();
-        }
-
-        dragRef.current = { active: false, pointerId: null, mode: 'box' };
-
-        try {
-            (e.target as Element).releasePointerCapture(e.pointerId);
-        } catch {
-            // already released
-        }
+        startDrag('box');
     };
 
     const onEndpointPointerDown = (pointIndex: number, e: React.PointerEvent) => {
@@ -133,8 +144,7 @@ export function SelectionOverlay({ surfaceRef }: SelectionOverlayProps) {
         }
 
         beginEndpointDrag(selected[0].id, pointIndex);
-        dragRef.current = { active: true, pointerId: e.pointerId, mode: 'endpoint' };
-        (e.target as Element).setPointerCapture(e.pointerId);
+        startDrag('endpoint');
     };
 
     const padding = 4;
@@ -183,9 +193,6 @@ export function SelectionOverlay({ surfaceRef }: SelectionOverlayProps) {
                                 cursor: 'grab',
                             }}
                             onPointerDown={(e) => onEndpointPointerDown(index, e)}
-                            onPointerMove={onHandlePointerMove}
-                            onPointerUp={onHandlePointerUp}
-                            onPointerCancel={onHandlePointerUp}
                         />
                     );
                 })}
@@ -223,9 +230,6 @@ export function SelectionOverlay({ surfaceRef }: SelectionOverlayProps) {
                             cursor: h.cursor,
                         }}
                         onPointerDown={(e) => onHandlePointerDown(h.key, e)}
-                        onPointerMove={onHandlePointerMove}
-                        onPointerUp={onHandlePointerUp}
-                        onPointerCancel={onHandlePointerUp}
                     />
                 );
             })}
