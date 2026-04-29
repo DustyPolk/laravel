@@ -1,9 +1,10 @@
 import { MousePointer2 } from 'lucide-react';
 import { applyBoundsToElement, getSelectionBounds, resizeBounds  } from '../lib/bounds';
 import type {Bounds} from '../lib/bounds';
+import { recomputeLinearBounds } from '../lib/element-factory';
 import { elementsInMarquee, hitTestTopElement } from '../lib/hit-test';
 import { useSceneStore } from '../store';
-import type { Element, HandleKey } from '../types';
+import type { Element, HandleKey, LinearElement, Point } from '../types';
 import type { PointerInput, ToolDescriptor } from './types';
 
 export interface SelectToolState {
@@ -114,6 +115,86 @@ export function endHandleResize(): void {
     internal.resizeOriginal = null;
     internal.resizeSnapshots.clear();
     internal.didChange = false;
+}
+
+interface EndpointDragState {
+    elementId: string;
+    pointIndex: number;
+    snapshot: LinearElement | null;
+}
+
+const endpointDrag: EndpointDragState = {
+    elementId: '',
+    pointIndex: -1,
+    snapshot: null,
+};
+
+export function beginEndpointDrag(elementId: string, pointIndex: number): void {
+    const store = useSceneStore.getState();
+    const element = store.elements.find((el) => el.id === elementId);
+
+    if (!element || (element.type !== 'line' && element.type !== 'arrow')) {
+        return;
+    }
+
+    store.pushHistory();
+    endpointDrag.elementId = elementId;
+    endpointDrag.pointIndex = pointIndex;
+    endpointDrag.snapshot = structuredClone(element);
+}
+
+export function continueEndpointDrag(worldX: number, worldY: number, shiftKey: boolean): void {
+    const snapshot = endpointDrag.snapshot;
+
+    if (!snapshot || endpointDrag.pointIndex < 0) {
+        return;
+    }
+
+    const otherIndex = endpointDrag.pointIndex === 0 ? snapshot.points.length - 1 : 0;
+    const otherX = snapshot.x + snapshot.points[otherIndex][0];
+    const otherY = snapshot.y + snapshot.points[otherIndex][1];
+    let targetX = worldX;
+    let targetY = worldY;
+
+    if (shiftKey) {
+        const dx = worldX - otherX;
+        const dy = worldY - otherY;
+        const angle = Math.atan2(dy, dx);
+        const snap = Math.PI / 12;
+        const snappedAngle = Math.round(angle / snap) * snap;
+        const length = Math.hypot(dx, dy);
+        targetX = otherX + Math.cos(snappedAngle) * length;
+        targetY = otherY + Math.sin(snappedAngle) * length;
+    }
+
+    const newPoints: Point[] = snapshot.points.map((p, i) =>
+        i === endpointDrag.pointIndex
+            ? [targetX - snapshot.x, targetY - snapshot.y]
+            : p,
+    );
+    const bounds = recomputeLinearBounds(snapshot, newPoints);
+
+    const store = useSceneStore.getState();
+    const updated = store.elements.map((el) => {
+        if (el.id !== endpointDrag.elementId) {
+            return el;
+        }
+
+        return {
+            ...snapshot,
+            points: newPoints,
+            width: bounds.width,
+            height: bounds.height,
+            version: el.version + 1,
+        } as Element;
+    });
+    store.replaceElements(updated);
+}
+
+export function endEndpointDrag(): void {
+    endpointDrag.elementId = '';
+    endpointDrag.pointIndex = -1;
+    endpointDrag.snapshot = null;
 }
 
 export function createSelectTool(): ToolDescriptor {
