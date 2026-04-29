@@ -4,21 +4,18 @@ use App\Models\Drawing;
 use App\Models\User;
 
 test('guests cannot list drawings', function () {
-    $user = User::factory()->create();
-
-    $this->get(route('drawings.index', ['current_team' => $user->currentTeam->slug]))
+    $this->get(route('drawings.index'))
         ->assertRedirect(route('login'));
 });
 
-test('users see only their current team drawings', function () {
+test('users see only their own drawings', function () {
     $user = User::factory()->create();
-    $team = $user->currentTeam;
+    $other = User::factory()->create();
 
-    $mine = Drawing::factory()->create(['team_id' => $team->id, 'creator_id' => $user->id, 'title' => 'Mine']);
-    $other = Drawing::factory()->create(['title' => 'Not mine']);
+    $mine = Drawing::factory()->for($user)->create(['title' => 'Mine']);
+    Drawing::factory()->for($other)->create(['title' => 'Not mine']);
 
-    $response = $this->actingAs($user)
-        ->get(route('drawings.index', ['current_team' => $team->slug]));
+    $response = $this->actingAs($user)->get(route('drawings.index'));
 
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
@@ -30,35 +27,26 @@ test('users see only their current team drawings', function () {
 
 test('store creates a blank drawing and redirects to the editor', function () {
     $user = User::factory()->create();
-    $team = $user->currentTeam;
 
-    $response = $this->actingAs($user)
-        ->post(route('drawings.store', ['current_team' => $team->slug]));
+    $response = $this->actingAs($user)->post(route('drawings.store'));
 
-    $drawing = Drawing::where('team_id', $team->id)->latest('created_at')->first();
+    $drawing = $user->drawings()->latest('created_at')->first();
 
-    expect($drawing)->not->toBeNull();
-    expect($drawing->creator_id)->toBe($user->id);
+    $this->assertModelExists($drawing);
+    expect($drawing->user_id)->toBe($user->id);
     expect($drawing->title)->toBe('Untitled drawing');
     expect($drawing->elements)->toBe([]);
 
-    $response->assertRedirect(route('drawings.edit', [
-        'current_team' => $team->slug,
-        'drawing' => $drawing->id,
-    ]));
+    $response->assertRedirect(route('drawings.edit', $drawing));
 });
 
 test('edit returns the drawing payload', function () {
     $user = User::factory()->create();
-    $team = $user->currentTeam;
-    $drawing = Drawing::factory()->create([
-        'team_id' => $team->id,
-        'creator_id' => $user->id,
+    $drawing = Drawing::factory()->for($user)->create([
         'elements' => [['id' => 'a', 'type' => 'rectangle']],
     ]);
 
-    $response = $this->actingAs($user)
-        ->get(route('drawings.edit', ['current_team' => $team->slug, 'drawing' => $drawing->id]));
+    $response = $this->actingAs($user)->get(route('drawings.edit', $drawing));
 
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
@@ -67,23 +55,19 @@ test('edit returns the drawing payload', function () {
         ->has('drawing.elements', 1));
 });
 
-test('non-team-members cannot view a drawing', function () {
+test('non-owners cannot view a drawing', function () {
     $owner = User::factory()->create();
     $intruder = User::factory()->create();
-    $drawing = Drawing::factory()->create(['team_id' => $owner->currentTeam->id]);
+    $drawing = Drawing::factory()->for($owner)->create();
 
     $this->actingAs($intruder)
-        ->get(route('drawings.edit', [
-            'current_team' => $intruder->currentTeam->slug,
-            'drawing' => $drawing->id,
-        ]))
+        ->get(route('drawings.edit', $drawing))
         ->assertForbidden();
 });
 
 test('update persists elements and title', function () {
     $user = User::factory()->create();
-    $team = $user->currentTeam;
-    $drawing = Drawing::factory()->create(['team_id' => $team->id, 'creator_id' => $user->id]);
+    $drawing = Drawing::factory()->for($user)->create();
 
     $payload = [
         'title' => 'My new diagram',
@@ -94,7 +78,7 @@ test('update persists elements and title', function () {
     ];
 
     $this->actingAs($user)
-        ->put(route('drawings.update', ['current_team' => $team->slug, 'drawing' => $drawing->id]), $payload)
+        ->put(route('drawings.update', $drawing), $payload)
         ->assertRedirect();
 
     $drawing->refresh();
@@ -105,55 +89,40 @@ test('update persists elements and title', function () {
 
 test('update rejects request missing elements', function () {
     $user = User::factory()->create();
-    $team = $user->currentTeam;
-    $drawing = Drawing::factory()->create(['team_id' => $team->id, 'creator_id' => $user->id]);
+    $drawing = Drawing::factory()->for($user)->create();
 
     $this->actingAs($user)
-        ->put(
-            route('drawings.update', ['current_team' => $team->slug, 'drawing' => $drawing->id]),
-            ['title' => 'x']
-        )
+        ->put(route('drawings.update', $drawing), ['title' => 'x'])
         ->assertSessionHasErrors('elements');
 });
 
-test('non-team-members cannot update a drawing', function () {
+test('non-owners cannot update a drawing', function () {
     $owner = User::factory()->create();
     $intruder = User::factory()->create();
-    $drawing = Drawing::factory()->create(['team_id' => $owner->currentTeam->id]);
+    $drawing = Drawing::factory()->for($owner)->create();
 
     $this->actingAs($intruder)
-        ->put(
-            route('drawings.update', [
-                'current_team' => $intruder->currentTeam->slug,
-                'drawing' => $drawing->id,
-            ]),
-            ['elements' => []]
-        )
+        ->put(route('drawings.update', $drawing), ['elements' => []])
         ->assertForbidden();
 });
 
 test('destroy soft-deletes the drawing', function () {
     $user = User::factory()->create();
-    $team = $user->currentTeam;
-    $drawing = Drawing::factory()->create(['team_id' => $team->id, 'creator_id' => $user->id]);
+    $drawing = Drawing::factory()->for($user)->create();
 
     $this->actingAs($user)
-        ->delete(route('drawings.destroy', ['current_team' => $team->slug, 'drawing' => $drawing->id]))
-        ->assertRedirect(route('drawings.index', ['current_team' => $team->slug]));
+        ->delete(route('drawings.destroy', $drawing))
+        ->assertRedirect(route('drawings.index'));
 
-    expect(Drawing::find($drawing->id))->toBeNull();
-    expect(Drawing::withTrashed()->find($drawing->id))->not->toBeNull();
+    $this->assertSoftDeleted($drawing);
 });
 
-test('non-team-members cannot delete a drawing', function () {
+test('non-owners cannot delete a drawing', function () {
     $owner = User::factory()->create();
     $intruder = User::factory()->create();
-    $drawing = Drawing::factory()->create(['team_id' => $owner->currentTeam->id]);
+    $drawing = Drawing::factory()->for($owner)->create();
 
     $this->actingAs($intruder)
-        ->delete(route('drawings.destroy', [
-            'current_team' => $intruder->currentTeam->slug,
-            'drawing' => $drawing->id,
-        ]))
+        ->delete(route('drawings.destroy', $drawing))
         ->assertForbidden();
 });

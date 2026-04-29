@@ -1,4 +1,3 @@
-import { usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDrawingShortcuts } from '@/hooks/use-drawing-shortcuts';
 import { index as drawingsIndex } from '@/routes/drawings';
@@ -23,9 +22,6 @@ export function DrawingEditor({ drawing }: DrawingEditorProps) {
     const surfaceRef = useRef<HTMLDivElement>(null);
     const [spacePressed, setSpacePressed] = useState(false);
 
-    const page = usePage();
-    const teamSlug = page.props.currentTeam?.slug ?? '';
-
     useEffect(() => {
         useSceneStore.getState().init({
             drawingId: drawing.id,
@@ -39,11 +35,10 @@ export function DrawingEditor({ drawing }: DrawingEditorProps) {
 
     const autoSave = useMemo(() => {
         return createAutoSave({
-            teamSlug,
             drawingId: drawing.id,
             onStatus: (status) => useSceneStore.getState().setSaveStatus(status),
         });
-    }, [teamSlug, drawing.id]);
+    }, [drawing.id]);
 
     useEffect(() => {
         let lastFingerprint = '';
@@ -82,7 +77,7 @@ export function DrawingEditor({ drawing }: DrawingEditorProps) {
 
     useDrawingShortcuts({ onSpaceChange: setSpacePressed });
 
-    const backHref = teamSlug ? drawingsIndex(teamSlug).url : '/';
+    const backHref = drawingsIndex().url;
 
     return (
         <div ref={surfaceRef} className="relative h-screen w-screen overflow-hidden bg-background">

@@ -1,13 +1,14 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { dashboard, login } from '@/routes';
+import { login } from '@/routes';
+import { index as drawingsIndex } from '@/routes/drawings';
 
 export default function Welcome() {
-    const { auth, currentTeam } = usePage().props;
-    const dashboardUrl = currentTeam ? dashboard(currentTeam.slug) : '/';
+    const { auth } = usePage().props;
+    const appHref = auth.user ? drawingsIndex() : login();
 
     return (
         <>
-            <Head title="Xcaladraw — sketch ideas like you mean it">
+            <Head title="OpenDraw — sketch ideas like you mean it">
                 <link rel="preconnect" href="https://fonts.bunny.net" />
                 <link
                     href="https://fonts.bunny.net/css?family=caveat:400,500,700|fraunces:400,500,600,700,900|instrument-sans:400,500,600"
@@ -142,7 +143,7 @@ export default function Welcome() {
                             <circle cx="44" cy="20" r="3" fill="#FFD23F" />
                         </svg>
                         <span className="xc-display text-2xl font-semibold tracking-tight">
-                            Xcaladraw
+                            OpenDraw
                         </span>
                     </Link>
 
@@ -161,14 +162,14 @@ export default function Welcome() {
                         </a>
                         {auth.user ? (
                             <Link
-                                href={dashboardUrl}
+                                href={appHref}
                                 className="rounded-full border-2 border-[#1A1A18] bg-[#FFD23F] px-5 py-2 text-sm font-semibold text-[#1A1A18] shadow-[3px_3px_0_0_#1A1A18] transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[5px_5px_0_0_#1A1A18] dark:border-[#F4EFE2] dark:shadow-[3px_3px_0_0_#F4EFE2] dark:hover:shadow-[5px_5px_0_0_#F4EFE2]"
                             >
-                                Open dashboard
+                                Open my drawings
                             </Link>
                         ) : (
                             <Link
-                                href={login()}
+                                href={appHref}
                                 className="rounded-full border-2 border-[#1A1A18] bg-transparent px-5 py-2 text-sm font-semibold text-[#1A1A18] transition-colors hover:bg-[#1A1A18] hover:text-[#FBF8F2] dark:border-[#F4EFE2] dark:text-[#F4EFE2] dark:hover:bg-[#F4EFE2] dark:hover:text-[#0E0E0C]"
                             >
                                 Sign in
@@ -209,10 +210,10 @@ export default function Welcome() {
                                 style={{ animationDelay: '.7s' }}
                             >
                                 <Link
-                                    href={auth.user ? dashboardUrl : login()}
+                                    href={appHref}
                                     className="xc-cta inline-flex items-center gap-2 rounded-md border-2 border-[#1A1A18] bg-[#FFD23F] px-7 py-4 text-base font-semibold text-[#1A1A18] dark:border-[#F4EFE2] dark:bg-[#F4EFE2] dark:text-[#0E0E0C]"
                                 >
-                                    {auth.user ? 'Open dashboard' : 'Start drawing — free'}
+                                    {auth.user ? 'Open my drawings' : 'Start drawing — free'}
                                     <svg width="20" height="14" viewBox="0 0 28 14" fill="none">
                                         <path
                                             d="M2 7 H 24 M 18 2 L 25 7 L 18 12"
@@ -389,10 +390,10 @@ export default function Welcome() {
                             </h2>
                             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                                 <Link
-                                    href={auth.user ? dashboardUrl : login()}
+                                    href={appHref}
                                     className="rounded-md bg-[#FFD23F] px-8 py-4 text-base font-semibold text-[#1A1A18] transition-transform hover:-translate-y-0.5 hover:shadow-[0_8px_30px_-4px_rgba(255,210,63,0.5)]"
                                 >
-                                    {auth.user ? 'Back to your boards →' : 'Start drawing — free →'}
+                                    {auth.user ? 'Back to your drawings →' : 'Start drawing — free →'}
                                 </Link>
                                 {!auth.user && (
                                     <span className="xc-hand text-xl text-[#FBF8F2]/80">
@@ -407,7 +408,7 @@ export default function Welcome() {
                 <footer className="relative z-10 border-t border-[#1A1A18]/10 dark:border-[#F4EFE2]/10">
                     <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-10 text-sm text-[#7A7468] sm:flex-row lg:px-12 dark:text-[#8B857A]">
                         <span className="xc-hand text-lg">made with squiggly lines &amp; Laravel</span>
-                        <span>© {new Date().getFullYear()} Xcaladraw</span>
+                        <span>© {new Date().getFullYear()} OpenDraw</span>
                     </div>
                 </footer>
             </div>

@@ -10,7 +10,6 @@ export interface SavePayload {
 }
 
 export interface AutoSaveOptions {
-    teamSlug: string;
     drawingId: string;
     onStatus(status: 'pending' | 'saving' | 'saved' | 'error'): void;
 }
@@ -29,10 +28,7 @@ export function createAutoSave(options: AutoSaveOptions, debounceMs = 1000) {
         pending = null;
         inFlight = true;
         options.onStatus('saving');
-        const action = DrawingController.update({
-            current_team: options.teamSlug,
-            drawing: options.drawingId,
-        });
+        const action = DrawingController.update(options.drawingId);
         router.put(
             action.url,
             data as unknown as Parameters<typeof router.put>[1],

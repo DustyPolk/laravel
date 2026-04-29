@@ -1,4 +1,4 @@
-import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import Heading from '@/components/heading';
@@ -20,7 +20,6 @@ interface DrawingListItem {
     title: string;
     thumbnail: string | null;
     updated_at: string;
-    creator: { id: number; name: string; avatar: string | null } | null;
 }
 
 interface Props {
@@ -55,15 +54,12 @@ function formatRelative(iso: string): string {
     return new Date(iso).toLocaleDateString();
 }
 
-function DrawingCard({ drawing, teamSlug }: { drawing: DrawingListItem; teamSlug: string }) {
+function DrawingCard({ drawing }: { drawing: DrawingListItem }) {
     const [confirmOpen, setConfirmOpen] = useState(false);
 
     return (
         <div className="group relative overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md">
-            <Link
-                href={edit({ current_team: teamSlug, drawing: drawing.id })}
-                className="block"
-            >
+            <Link href={edit(drawing.id)} className="block">
                 <div className="aspect-video w-full bg-muted/40">
                     {drawing.thumbnail ? (
                         <img
@@ -83,7 +79,6 @@ function DrawingCard({ drawing, teamSlug }: { drawing: DrawingListItem; teamSlug
                     </p>
                     <p className="text-xs text-muted-foreground">
                         Updated {formatRelative(drawing.updated_at)}
-                        {drawing.creator ? ` · ${drawing.creator.name}` : null}
                     </p>
                 </div>
             </Link>
@@ -104,7 +99,7 @@ function DrawingCard({ drawing, teamSlug }: { drawing: DrawingListItem; teamSlug
                         <DialogHeader>
                             <DialogTitle>Delete drawing?</DialogTitle>
                             <DialogDescription>
-                                {drawing.title || 'Untitled drawing'} will be removed for everyone on this team.
+                                {drawing.title || 'Untitled drawing'} will be permanently removed.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
@@ -114,12 +109,7 @@ function DrawingCard({ drawing, teamSlug }: { drawing: DrawingListItem; teamSlug
                             >
                                 Cancel
                             </Button>
-                            <Form
-                                {...destroy.form({
-                                    current_team: teamSlug,
-                                    drawing: drawing.id,
-                                })}
-                            >
+                            <Form {...destroy.form(drawing.id)}>
                                 <Button type="submit" variant="destructive">
                                     Delete
                                 </Button>
@@ -134,8 +124,6 @@ function DrawingCard({ drawing, teamSlug }: { drawing: DrawingListItem; teamSlug
 
 export default function DrawingsIndex({ drawings }: Props) {
     useFlashToast();
-    const page = usePage();
-    const teamSlug = page.props.currentTeam?.slug ?? '';
 
     return (
         <>
@@ -145,10 +133,10 @@ export default function DrawingsIndex({ drawings }: Props) {
                 <div className="flex items-center justify-between">
                     <Heading
                         title="Drawings"
-                        description="Sketch, diagram, and ship together."
+                        description="Sketch, diagram, and ship."
                     />
 
-                    <Form {...store.form(teamSlug)}>
+                    <Form {...store.form()}>
                         <Button type="submit">
                             <Plus className="size-4" />
                             New drawing
@@ -163,7 +151,7 @@ export default function DrawingsIndex({ drawings }: Props) {
                         <p className="mt-1 text-sm text-muted-foreground">
                             Create your first drawing to get started.
                         </p>
-                        <Form {...store.form(teamSlug)}>
+                        <Form {...store.form()}>
                             <Button type="submit" className="mt-4">
                                 <Plus className="size-4" />
                                 New drawing
@@ -173,11 +161,7 @@ export default function DrawingsIndex({ drawings }: Props) {
                 ) : (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {drawings.map((drawing) => (
-                            <DrawingCard
-                                key={drawing.id}
-                                drawing={drawing}
-                                teamSlug={teamSlug}
-                            />
+                            <DrawingCard key={drawing.id} drawing={drawing} />
                         ))}
                     </div>
                 )}
@@ -186,11 +170,11 @@ export default function DrawingsIndex({ drawings }: Props) {
     );
 }
 
-DrawingsIndex.layout = (props: { currentTeam?: { slug: string } | null }) => ({
+DrawingsIndex.layout = () => ({
     breadcrumbs: [
         {
             title: 'Drawings',
-            href: props.currentTeam ? index(props.currentTeam.slug) : '/',
+            href: index(),
         },
     ],
 });
